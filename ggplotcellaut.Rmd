@@ -1,0 +1,165 @@
+---
+title: "Conway's Game of Life with purrr"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = F}
+library(tidyverse)
+```
+
+```{r}
+# t = 0: Start with a nxn grid of cells, each one has a p probability of being alive (1) and a 1-p probability of being dead (0)
+
+create_vector <- function(n, p, x){
+  sample(c(1,0), replace = T, size = n, prob = c(p, 1-p))
+}
+init_grid <- function(n, p){
+  map(1:n, ~create_vector(n, p, .x))
+}
+```
+
+```{r}
+# Some helper functions
+
+elementwise_addition <- function(x, y){
+  # x and y are vectors
+  map2_dbl(x, y, sum, na.rm = T)
+}
+elementwise_addition3 <- function(m, n, o){
+  # m, n, o are vectors
+  a <- map2_dbl(m, n, sum, na.rm = T)
+  map2_dbl(a, o, sum, na.rm = T)
+}
+elementwise_addition4 <- function(m, n, o, p){
+  # m, n, o, p are vectors
+  a <- map2_dbl(m, n, sum, na.rm = T)
+  b <- map2_dbl(o, p, sum, na.rm = T)
+  map2_dbl(a, b, sum, na.rm = T)
+}
+up_if_applicable <- function(index, t, n){
+  if (index > 1) {
+    t[[index - 1]]
+  } else {
+    rep(0, n)
+  }
+}
+down_if_applicable <- function(index, t, n){
+  if (index < n) {
+    t[[index + 1]]
+  } else {
+    rep(0, n)
+  }
+}
+```
+
+```{r}
+# First: write a function that determines how many neighbors a cell has.
+horizontal_neighbors <- function(t){
+  right <- map(t, lead)
+  left <- map(t, lag)
+  map2(right, left, elementwise_addition)
+}
+vertical_neighbors <- function(t, n){
+  up <- map(1:n, up_if_applicable, t, n)
+  down <- map(1:n, down_if_applicable, t, n)
+  map2(up, down, elementwise_addition)
+}
+diagonal_neighbors <- function(t, n){
+  up_left <- map(1:n, ~ up_if_applicable(.x, t, n) %>% lag())
+  up_right <- map(1:n, ~ up_if_applicable(.x, t, n) %>% lead())
+  down_left <- map(1:n, ~ down_if_applicable(.x, t, n) %>% lag())
+  down_right <- map(1:n, ~ down_if_applicable(.x, t, n) %>% lead())
+  pmap(list(up_left, up_right, down_left, down_right), elementwise_addition4)
+}
+calculate_neighbors <- function(t, n){
+  pmap(list(horizontal_neighbors(t), vertical_neighbors(t, n), diagonal_neighbors(t, n)), elementwise_addition3)
+}
+
+# Apply the math rules:
+#   Rule 1: Underpopulation: cell dies if it has less than 2 live neighbors.
+#   Rule 2: Overcrowding: Any live cell with more than three live neighbours dies.
+#   Rule 3: Reproduction: Any dead cell with exactly three live neighbours becomes a live cell
+apply_rules_v <- function(totalneigh_v, t_v){
+  map2_dbl(totalneigh_v, t_v, ~ 
+             case_when(
+               .x < 2  ~ 0,
+               .x == 2 ~ .y,
+               .x == 3 ~ 1,
+               .x > 3  ~ 0
+               )
+           )
+}
+apply_rules <- function(totalneigh, t){
+  map2(totalneigh, t, apply_rules_v)
+}
+```
+
+```{r}
+# Iterate
+time_step <- function(t, x, n){
+  calculate_neighbors(t, n) %>%
+    apply_rules(t)
+}
+
+n <- 25
+it <- 40
+t0 <- init_grid(n, .5)
+data <- accumulate(1:(it-1), time_step, .init = t0, n)
+```
+
+```{r}
+data_to_tibble <- function(data, n, it){
+  tibble(
+   cells = unlist(data),
+   xpos = rep(1:n, n*it),
+   ypos = rep(rep(n:1, each = n), it),
+   t = rep(1:it, each = n*n)
+ )
+}
+
+dataf <- data_to_tibble(data, n, it)
+```
+
+```{r}
+library(gganimate)
+library(transformr)
+
+dataf %>%
+    ggplot() +
+    geom_raster(aes(x = xpos, y = ypos, fill = as.factor(cells))) +
+    scale_fill_manual(values = c("#ffffff", "#693754")) +
+    theme_minimal() + 
+  transition_manual(t, cumulative = F)
+```
+
+```{r}
+#Different initial conditions
+t0 <- list(
+  rep(0, 10),
+  rep(0, 10),
+  rep(0, 10),
+  rep(0, 10),
+  c(rep(0, 5), 1, rep(0, 4)),
+  c(rep(0, 4), 1, 1, 1, rep(0, 3)),
+  rep(0, 10),
+  rep(0, 10),
+  rep(0, 10),
+  rep(0, 10)
+)
+
+n <- 10
+it <- 20
+data <- accumulate(1:(it-1), time_step, .init = t0, n)
+
+data_to_tibble(data, n, it) %>%
+    ggplot() +
+    geom_raster(aes(x = xpos, y = ypos, fill = as.factor(cells))) +
+    scale_fill_manual(values = c("#ffffff", "#693754")) +
+    theme_minimal() + 
+  transition_manual(t, cumulative = F)
+```
+

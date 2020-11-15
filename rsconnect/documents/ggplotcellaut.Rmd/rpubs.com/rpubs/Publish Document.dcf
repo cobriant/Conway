@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/691078/8f1a4660a45148d9817e7ebc5b8543a2
+bundleId: https://api.rpubs.com/api/v1/document/691078/8f1a4660a45148d9817e7ebc5b8543a2
+url: http://rpubs.com/colleenobriant/691078
+when: 1605407967.80735
